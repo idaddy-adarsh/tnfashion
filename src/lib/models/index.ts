@@ -4,13 +4,27 @@ import { Review, Wishlist, Category, Campaign, Banner } from '@/types'
 // Review Schema
 const ReviewSchema = new Schema<Review>({
   userId: {
-    type: String,
+    type: Schema.Types.ObjectId,
     required: true,
     ref: 'User',
     index: true
   },
-  productId: {
+  userName: {
     type: String,
+    required: true,
+    trim: true
+  },
+  userEmail: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  userImage: {
+    type: String,
+    trim: true
+  },
+  productId: {
+    type: Schema.Types.ObjectId,
     required: true,
     ref: 'Product',
     index: true
@@ -30,6 +44,40 @@ const ReviewSchema = new Schema<Review>({
   isVerified: {
     type: Boolean,
     default: false
+  },
+  helpfulCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  helpfulVotes: [{
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  reports: [{
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    reason: {
+      type: String,
+      required: true
+    },
+    reportedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  reportedCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  needsModeration: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, {
   timestamps: true
@@ -197,3 +245,6 @@ export const Wishlist = mongoose.models.Wishlist || mongoose.model<Wishlist>('Wi
 export const Category = mongoose.models.Category || mongoose.model<Category>('Category', CategorySchema)
 export const Campaign = mongoose.models.Campaign || mongoose.model<Campaign>('Campaign', CampaignSchema)
 export const Banner = mongoose.models.Banner || mongoose.model<Banner>('Banner', BannerSchema)
+
+// Re-export Product model
+export { default as Product } from './Product'

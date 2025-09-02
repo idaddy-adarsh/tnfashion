@@ -4,10 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build",
+    "build:dev": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "seed": "node -r esbuild-register scripts/seed.js"
+    "lint:fix": "eslint --fix",
+    "type-check": "tsc --noEmit",
+    "seed": "node -r esbuild-register scripts/seed.js",
+    "deploy:prod": "node scripts/deploy-production.js"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

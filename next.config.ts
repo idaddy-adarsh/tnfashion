@@ -1,17 +1,27 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Temporarily allow builds with errors for production deployment
+  // TODO: Fix all TypeScript and ESLint errors before final deployment
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Production optimizations
+  compress: true,
+  poweredByHeader: false,
+  generateEtags: false,
+  httpAgentOptions: {
+    keepAlive: true,
+  },
   images: {
     domains: [
       'images.unsplash.com',
       'plus.unsplash.com',
       'lh3.googleusercontent.com',
+      'prod-img.thesouledstore.com',
     ],
     remotePatterns: [
       {

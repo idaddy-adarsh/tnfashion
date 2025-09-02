@@ -361,7 +361,7 @@ export default function ProductDetailPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <Truck className="h-4 w-4" />
-                  <span>Free shipping over $100</span>
+                  <span>Free shipping over ₹2000</span>
                 </div>
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <RotateCcw className="h-4 w-4" />

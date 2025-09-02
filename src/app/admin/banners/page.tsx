@@ -2,10 +2,10 @@
 
 import { useSession } from 'next-auth/react'
 import { redirect } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Banner } from '@/types'
-import { Pencil, Trash2, Plus, Eye, EyeOff, MoveUp, MoveDown } from 'lucide-react'
+import { Pencil, Trash2, Plus, Eye, EyeOff, MoveUp, MoveDown, Upload, X } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -15,6 +15,10 @@ export default function AdminBanners() {
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingBanner, setEditingBanner] = useState<Banner | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>('')
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     title: '',
     subtitle: '',
@@ -55,7 +59,28 @@ export default function AdminBanners() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    // Validate that we have an image (either uploaded file or existing image for edit)
+    if (!selectedFile && !formData.image) {
+      alert('Please select an image for the banner')
+      return
+    }
+    
+    setUploading(true)
+    
     try {
+      let imageUrl = formData.image
+      
+      // Upload new image if a file is selected
+      if (selectedFile) {
+        imageUrl = await uploadImage(selectedFile)
+      }
+      
+      // Prepare banner data
+      const bannerData = {
+        ...formData,
+        image: imageUrl
+      }
+      
       const url = editingBanner 
         ? `/api/admin/banners/${editingBanner._id}`
         : '/api/admin/banners'
@@ -67,7 +92,7 @@ export default function AdminBanners() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(bannerData),
       })
 
       const data = await response.json()
@@ -81,6 +106,8 @@ export default function AdminBanners() {
       }
     } catch (error) {
       alert('Error: ' + error)
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -144,6 +171,13 @@ export default function AdminBanners() {
       displayOrder: banner.displayOrder,
       isActive: banner.isActive
     })
+    // Clear upload states when editing
+    setSelectedFile(null)
+    setImagePreview('')
+    setUploading(false)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
     setShowAddForm(true)
   }
 
@@ -158,8 +192,79 @@ export default function AdminBanners() {
       displayOrder: 0,
       isActive: true
     })
+    setSelectedFile(null)
+    setImagePreview('')
+    setUploading(false)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
     setEditingBanner(null)
     setShowAddForm(false)
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file')
+        return
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB')
+        return
+      }
+      
+      setSelectedFile(file)
+      
+      // Create preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file) {
+      const event = { target: { files: [file] } } as any
+      handleFileSelect(event)
+    }
+  }
+
+  const removeSelectedImage = () => {
+    setSelectedFile(null)
+    setImagePreview('')
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const uploadImage = async (file: File): Promise<string> => {
+    const formData = new FormData()
+    formData.append('image', file)
+    
+    const response = await fetch('/api/admin/upload/banner', {
+      method: 'POST',
+      body: formData,
+    })
+    
+    const data = await response.json()
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Upload failed')
+    }
+    
+    return data.imageUrl
   }
 
   const updateDisplayOrder = async (bannerId: string, newOrder: number) => {
@@ -266,17 +371,92 @@ export default function AdminBanners() {
                 />
               </div>
 
-              <div>
+              {/* Image Upload Section */}
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Image URL *
+                  Banner Image *
                 </label>
-                <input
-                  type="url"
-                  value={formData.image}
-                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
+                
+                {/* Upload Area */}
+                <div
+                  className="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors"
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                >
+                  {imagePreview ? (
+                    <div className="space-y-4">
+                      <div className="relative w-full max-w-md mx-auto">
+                        <div className="relative h-48 w-full rounded-lg overflow-hidden">
+                          <Image
+                            src={imagePreview}
+                            alt="Preview"
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={removeSelectedImage}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        {selectedFile?.name} ({((selectedFile?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+                      </p>
+                    </div>
+                  ) : formData.image ? (
+                    <div className="space-y-4">
+                      <div className="relative w-full max-w-md mx-auto">
+                        <div className="relative h-48 w-full rounded-lg overflow-hidden">
+                          <Image
+                            src={formData.image}
+                            alt="Current banner"
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600">Current banner image</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="mx-auto"
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Change Image
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <Upload className="w-12 h-12 text-gray-400 mx-auto" />
+                      <div>
+                        <p className="text-gray-600 mb-2">Drag and drop an image here, or click to select</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Choose File
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Supported formats: JPG, PNG, GIF. Max size: 5MB
+                      </p>
+                    </div>
+                  )}
+                  
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                </div>
               </div>
 
               <div>
@@ -330,8 +510,15 @@ export default function AdminBanners() {
                   <Button type="button" variant="outline" onClick={resetForm}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                    {editingBanner ? 'Update' : 'Create'} Banner
+                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={uploading}>
+                    {uploading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        {selectedFile ? 'Uploading...' : (editingBanner ? 'Updating...' : 'Creating...')}
+                      </>
+                    ) : (
+                      <>{editingBanner ? 'Update' : 'Create'} Banner</>
+                    )}
                   </Button>
                 </div>
               </div>

@@ -2,8 +2,10 @@
 
 import { useSession } from 'next-auth/react'
 import { redirect, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import { Upload, X } from 'lucide-react'
+import Image from 'next/image'
 
 interface ProductForm {
   name: string
@@ -26,6 +28,9 @@ export default function AddProductPage() {
   const [tagInput, setTagInput] = useState('')
   const [uploadLoading, setUploadLoading] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [formData, setFormData] = useState<ProductForm>({
     name: '',
@@ -112,10 +117,26 @@ export default function AddProductPage() {
     }))
   }
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
+    await processFile(file)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file) {
+      processFile(file)
+    }
+  }
+
+  const processFile = async (file: File) => {
     // Validate file type
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file')
@@ -130,22 +151,62 @@ export default function AddProductPage() {
 
     try {
       setUploadLoading(true)
+      setSelectedFile(file)
       
-      // Convert to base64 for simple storage (in production, use cloud storage)
+      // Create preview
       const reader = new FileReader()
-      reader.onload = (event) => {
-        const base64String = event.target?.result as string
-        setFormData(prev => ({
-          ...prev,
-          images: [...prev.images, base64String]
-        }))
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string)
       }
       reader.readAsDataURL(file)
+      
+      // Upload the image using API
+      const uploadedImageUrl = await uploadImage(file)
+      
+      // Add to images array
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, uploadedImageUrl]
+      }))
+      
+      // Clear preview states
+      setSelectedFile(null)
+      setImagePreview('')
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      
     } catch (error) {
       console.error('Error uploading file:', error)
-      alert('Error uploading file')
+      alert('Error uploading file: ' + error)
     } finally {
       setUploadLoading(false)
+    }
+  }
+
+  const uploadImage = async (file: File): Promise<string> => {
+    const formData = new FormData()
+    formData.append('image', file)
+    
+    const response = await fetch('/api/admin/upload/product', {
+      method: 'POST',
+      body: formData,
+    })
+    
+    const data = await response.json()
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Upload failed')
+    }
+    
+    return data.imageUrl
+  }
+
+  const removeSelectedImage = () => {
+    setSelectedFile(null)
+    setImagePreview('')
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
     }
   }
 
@@ -350,29 +411,115 @@ export default function AddProductPage() {
 
           {/* Product Images */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-6">Product Images</h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-6">Product Images *</h2>
             
             <div className="space-y-4">
-              {/* Image Upload Options */}
-              <div className="flex space-x-4 justify-center">
-                {/* File Upload */}
-                <label className="relative cursor-pointer bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-md text-sm font-medium text-center">
-                  {uploadLoading ? 'Uploading...' : 'Upload File'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={uploadLoading}
-                  />
-                </label>
+              {/* Enhanced Upload Area */}
+              <div
+                className="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors"
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
+                {imagePreview ? (
+                  <div className="space-y-4">
+                    <div className="relative w-full max-w-md mx-auto">
+                      <div className="relative h-48 w-full rounded-lg overflow-hidden">
+                        <Image
+                          src={imagePreview}
+                          alt="Preview"
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={removeSelectedImage}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      {selectedFile?.name} ({((selectedFile?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Upload className="w-12 h-12 text-gray-400 mx-auto" />
+                    <div>
+                      <p className="text-gray-600 mb-2">Drag and drop images here, or click to select</p>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md text-sm font-medium"
+                        disabled={uploadLoading}
+                      >
+                        {uploadLoading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 mr-2 inline-block" />
+                            Choose Images
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Supported formats: JPG, PNG, GIF. Max size: 5MB per image
+                    </p>
+                  </div>
+                )}
                 
-                {/* Camera */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  disabled={uploadLoading}
+                />
+              </div>
+
+              {/* Uploaded Images Grid */}
+              {formData.images.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">
+                    Uploaded Images ({formData.images.length})
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {formData.images.map((image, index) => (
+                      <div key={index} className="relative">
+                        <div className="relative h-32 w-full rounded-lg overflow-hidden">
+                          <Image
+                            src={image}
+                            alt={`Product image ${index + 1}`}
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 text-xs"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Camera Option */}
+              <div className="flex justify-center pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={handleCameraCapture}
                   className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-md text-sm font-medium"
-                  disabled={showCamera}
+                  disabled={showCamera || uploadLoading}
                 >
                   📷 Take Photo
                 </button>
@@ -393,27 +540,6 @@ export default function AddProductPage() {
                       Close
                     </button>
                   </div>
-                </div>
-              )}
-
-              {formData.images.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {formData.images.map((image, index) => (
-                    <div key={index} className="relative">
-                      <img
-                        src={image}
-                        alt={`Product image ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>

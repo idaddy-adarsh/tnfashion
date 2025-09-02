@@ -114,6 +114,9 @@ export type OrderStatus =
 export interface Review {
   _id: string;
   userId: string;
+  userName: string;
+  userEmail: string;
+  userImage?: string;
   productId: string;
   rating: number;
   comment: string;
@@ -121,6 +124,20 @@ export interface Review {
   isVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
+  user?: {
+    name: string;
+    email: string;
+    image?: string;
+  };
+  helpfulCount?: number;
+  helpfulVotes?: string[];
+  reportedCount?: number;
+  reports?: {
+    userId: string;
+    reason: string;
+    reportedAt: Date;
+  }[];
+  needsModeration?: boolean;
 }
 
 export interface Wishlist {

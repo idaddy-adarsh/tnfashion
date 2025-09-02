@@ -14,6 +14,7 @@ export function formatPrice(
     style: "currency",
     currency,
     notation,
+    currencyDisplay: "symbol"
   }).format(price)
 }
 
